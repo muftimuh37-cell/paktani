@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>TaniCatat - Sistem Komoditas Desa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .card-hover:active { transform: scale(0.98); }
+        button:active { transform: scale(0.96); }
+        .active-tab { background-color: #2c7a4d; color: white; }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <!-- AUTH CONTAINER -->
+    <div id="authContainer" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-emerald-700 to-emerald-900">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-6">
+            <div class="text-center mb-6">
+                <i class="fas fa-store text-5xl text-emerald-700 mb-2"></i>
+                <h1 class="text-2xl font-bold text-gray-800">TaniCatat</h1>
+                <p class="text-gray-500 text-sm">Sistem Pencatatan Tengkulak</p>
+            </div>
+            <div id="loginPanel">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-semibold mb-1">Email</label>
+                    <input type="email" id="loginEmail" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="tengkulak@example.com">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-semibold mb-1">Password</label>
+                    <input type="password" id="loginPassword" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="******">
+                </div>
+                <button id="loginBtn" class="w-full bg-emerald-700 text-white p-3 rounded-xl font-bold text-lg shadow-md">Masuk</button>
+                <p class="text-center text-gray-600 mt-3">Belum punya akun? <button id="showRegisterBtn" class="text-emerald-700 font-semibold">Daftar</button></p>
+            </div>
+            <div id="registerPanel" class="hidden">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-semibold mb-1">Email</label>
+                    <input type="email" id="regEmail" class="w-full p-3 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-semibold mb-1">Password (min 6)</label>
+                    <input type="password" id="regPassword" class="w-full p-3 border border-gray-300 rounded-lg">
+                </div>
+                <button id="registerBtn" class="w-full bg-emerald-600 text-white p-3 rounded-xl font-bold">Daftar</button>
+                <p class="text-center text-gray-600 mt-3"><button id="showLoginBtn" class="text-emerald-700">← Kembali ke Login</button></p>
+            </div>
+            <div id="authMessage" class="mt-3 text-center text-sm text-red-600"></div>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="appContainer" class="hidden max-w-4xl mx-auto pb-20">
+        <div class="bg-white shadow-sm sticky top-0 z-10 border-b">
+            <div class="flex justify-between items-center p-4">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-tractor text-emerald-700 text-2xl"></i>
+                    <h1 class="text-xl font-bold">TaniCatat</h1>
+                </div>
+                <button id="logoutBtn" class="bg-red-100 text-red-700 px-3 py-1.5 rounded-lg text-sm"><i class="fas fa-sign-out-alt mr-1"></i> Keluar</button>
+            </div>
+            <div class="flex overflow-x-auto gap-1 px-2 pb-2">
+                <button data-tab="dashboard" class="tab-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100">📊 Dashboard</button>
+                <button data-tab="purchases" class="tab-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100">🛒 Pembelian</button>
+                <button data-tab="sales" class="tab-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100">💰 Penjualan</button>
+                <button data-tab="stock" class="tab-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100">📦 Stok</button>
+                <button data-tab="buyers" class="tab-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100">📋 Buyer</button>
+                <button data-tab="national" class="tab-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100">🏷️ Harga Nasional</button>
+                <button data-tab="reports" class="tab-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100">📑 Laporan</button>
+            </div>
+        </div>
+        <div id="dashboardPanel" class="p-4 panel">Loading...</div>
+        <div id="purchasesPanel" class="p-4 panel hidden">Loading...</div>
+        <div id="salesPanel" class="p-4 panel hidden">Loading...</div>
+        <div id="stockPanel" class="p-4 panel hidden">Loading...</div>
+        <div id="buyersPanel" class="p-4 panel hidden">Loading...</div>
+        <div id="nationalPanel" class="p-4 panel hidden">Loading...</div>
+        <div id="reportsPanel" class="p-4 panel hidden">Loading...</div>
+    </div>
+
+    <script>
+        // ==================== GANTI DENGAN KREDENSIAL SUPABASE ANDA ====================
+        const SUPABASE_URL = "https://ganti-dengan-project-url-anda.supabase.co";
+        const SUPABASE_ANON_KEY = "ganti-dengan-anon-key-anda";
+        // =============================================================================
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let currentUser = null;
+        let nationalChart = null;
+
+        // Helper UI
+        function showAuth() { document.getElementById('authContainer').classList.remove('hidden'); document.getElementById('appContainer').classList.add('hidden'); }
+        function showApp() { document.getElementById('authContainer').classList.add('hidden'); document.getElementById('appContainer').classList.remove('hidden'); loadAllData(); }
+
+        // Auth
+        async function handleLogin(email, password) {
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            currentUser = data.user;
+            showApp();
+        }
+        async function handleRegister(email, password) {
+            const { data, error } = await supabase.auth.signUp({ email, password });
+            if (error) throw error;
+            alert("Pendaftaran berhasil! Silakan login.");
+            document.getElementById('loginPanel').classList.remove('hidden');
+            document.getElementById('registerPanel').classList.add('hidden');
+        }
+        async function handleLogout() { await supabase.auth.signOut(); currentUser = null; showAuth(); }
+
+        // Data operations (singkat, lengkap)
+        async function addPurchase(data) { await supabase.from('purchases').insert({ ...data, user_id: currentUser.id }); }
+        async function addSale(data) { await supabase.from('sales').insert({ ...data, user_id: currentUser.id }); }
+        async function fetchPurchases() { const { data } = await supabase.from('purchases').select('*').eq('user_id', currentUser.id).order('date', { ascending: false }); return data || []; }
+        async function fetchSales() { const { data } = await supabase.from('sales').select('*').eq('user_id', currentUser.id).order('date', { ascending: false }); return data || []; }
+        async function fetchBuyers() { const { data } = await supabase.from('buyers').select('*').eq('user_id', currentUser.id); return data || []; }
+        async function addBuyer(b) { await supabase.from('buyers').insert({ ...b, user_id: currentUser.id }); }
+        async function updateBuyer(id, updates) { await supabase.from('buyers').update(updates).eq('id', id).eq('user_id', currentUser.id); }
+        async function deleteBuyer(id) { await supabase.from('buyers').delete().eq('id', id).eq('user_id', currentUser.id); }
+
+        async function computeStock() {
+            const purchases = await fetchPurchases();
+            const sales = await fetchSales();
+            const comms = ['Copra', 'Clove', 'Nutmeg', 'Coconut'];
+            let stock = { Copra:0, Clove:0, Nutmeg:0, Coconut:0 };
+            purchases.forEach(p => { if(comms.includes(p.commodity)) stock[p.commodity] += p.quantity; });
+            sales.forEach(s => { if(comms.includes(s.commodity)) stock[s.commodity] -= s.quantity; });
+            return stock;
+        }
+
+        async function getProfit() {
+            const purchases = await fetchPurchases();
+            const sales = await fetchSales();
+            const totalPurchaseValue = purchases.reduce((s,p) => s + p.quantity*p.price_per_kg,0);
+            const totalSalesValue = sales.reduce((s,sal) => s + sal.quantity*sal.price_per_kg,0);
+            let avgBuy = {};
+            let qty = {};
+            purchases.forEach(p => { avgBuy[p.commodity] = (avgBuy[p.commodity]||0) + p.quantity*p.price_per_kg; qty[p.commodity] = (qty[p.commodity]||0) + p.quantity; });
+            for(let c in avgBuy) if(qty[c]) avgBuy[c] /= qty[c];
+            let profit = 0;
+            sales.forEach(s => { profit += (s.price_per_kg - (avgBuy[s.commodity]||0)) * s.quantity; });
+            return { totalPurchaseValue, totalSalesValue, totalProfit: profit>0?profit:0 };
+        }
+
+        async function exportExcel() {
+            const sales = await fetchSales();
+            const purchases = await fetchPurchases();
+            let avgBuy = {};
+            let qty = {};
+            purchases.forEach(p => { avgBuy[p.commodity] = (avgBuy[p.commodity]||0) + p.quantity*p.price_per_kg; qty[p.commodity] = (qty[p.commodity]||0) + p.quantity; });
+            for(let c in avgBuy) if(qty[c]) avgBuy[c] /= qty[c];
+            const rows = sales.map(s => ({ Tanggal: s.date, Komoditas: s.commodity, "Kg": s.quantity, "Harga Beli Rata2": avgBuy[s.commodity]?.toFixed(2)||0, "Harga Jual": s.price_per_kg, Profit: ((s.price_per_kg - (avgBuy[s.commodity]||0))*s.quantity).toFixed(2) }));
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Laporan");
+            XLSX.writeFile(wb, `TaniCatat_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        // Render functions (ringkas)
+        async function renderDashboard() {
+            const profit = await getProfit();
+            const stock = await computeStock();
+            document.getElementById('dashboardPanel').innerHTML = `
+                <div class="grid grid-cols-2 gap-3"><div class="bg-white p-4 rounded shadow text-center"><i class="fas fa-shopping-cart text-emerald-600"></i><p>Total Pembelian</p><p class="font-bold">Rp ${profit.totalPurchaseValue.toLocaleString()}</p></div>
+                <div class="bg-white p-4 rounded shadow text-center"><i class="fas fa-chart-line text-blue-600"></i><p>Total Penjualan</p><p class="font-bold">Rp ${profit.totalSalesValue.toLocaleString()}</p></div>
+                <div class="bg-white p-4 rounded shadow col-span-2 text-center"><i class="fas fa-coins text-amber-600"></i><p>Estimasi Profit</p><p class="font-bold text-xl">Rp ${profit.totalProfit.toLocaleString()}</p></div></div>
+                <div class="bg-white p-4 mt-4 rounded shadow"><h3 class="font-bold">📦 Stok</h3><div class="grid grid-cols-2 gap-2 mt-2">${Object.entries(stock).map(([c,q]) => `<div>${c}: ${q.toFixed(1)} kg</div>`).join('')}</div></div>`;
+        }
+
+        async function renderPurchases() {
+            const purchases = await fetchPurchases();
+            document.getElementById('purchasesPanel').innerHTML = `
+                <form id="purchaseForm" class="bg-white p-4 rounded shadow space-y-3"><h2 class="font-bold">➕ Catat Pembelian</h2>
+                <input type="date" id="purchaseDate" class="w-full p-2 border rounded" required>
+                <input type="text" id="farmerName" placeholder="Nama Petani" class="w-full p-2 border rounded" required>
+                <select id="purchaseCommodity" class="w-full p-2 border rounded"><option>Copra</option><option>Clove</option><option>Nutmeg</option><option>Coconut</option></select>
+                <input type="number" id="purchaseWeight" placeholder="Berat (kg)" step="any" class="w-full p-2 border rounded" required>
+                <input type="number" id="purchasePriceKg" placeholder="Harga per kg" step="any" class="w-full p-2 border rounded" required>
+                <button type="submit" class="bg-emerald-700 w-full text-white py-2 rounded-lg">Simpan</button></form>
+                <h3 class="font-semibold mt-4">Riwayat</h3><div class="overflow-auto">${purchases.map(p => `<div class="bg-white p-2 mb-1 rounded shadow">${p.date} - ${p.farmer_name} - ${p.commodity} ${p.quantity}kg @ Rp${p.price_per_kg}</div>`).join('')}</div>`;
+            document.getElementById('purchaseForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await addPurchase({ date: document.getElementById('purchaseDate').value, farmer_name: document.getElementById('farmerName').value, commodity: document.getElementById('purchaseCommodity').value, quantity: parseFloat(document.getElementById('purchaseWeight').value), price_per_kg: parseFloat(document.getElementById('purchasePriceKg').value) });
+                alert("Tersimpan"); renderPurchases(); renderDashboard(); renderStock();
+            });
+        }
+
+        async function renderSales() {
+            const sales = await fetchSales();
+            document.getElementById('salesPanel').innerHTML = `
+                <form id="salesForm" class="bg-white p-4 rounded shadow space-y-3"><h2 class="font-bold">💰 Catat Penjualan</h2>
+                <input type="date" id="saleDate" class="w-full p-2 border rounded" required>
+                <input type="text" id="buyerName" placeholder="Nama Pembeli" class="w-full p-2 border rounded" required>
+                <select id="saleCommodity" class="w-full p-2 border rounded"><option>Copra</option><option>Clove</option><option>Nutmeg</option><option>Coconut</option></select>
+                <input type="number" id="saleQuantity" placeholder="Jumlah (kg)" step="any" class="w-full p-2 border rounded" required>
+                <input type="number" id="salePrice" placeholder="Harga jual per kg" step="any" class="w-full p-2 border rounded" required>
+                <button type="submit" class="bg-blue-700 w-full text-white py-2 rounded-lg">Simpan</button></form>
+                <h3 class="font-semibold mt-4">Riwayat</h3>${sales.map(s => `<div class="bg-white p-2 mb-1 rounded shadow">${s.date} - ${s.buyer_name} - ${s.commodity} ${s.quantity}kg @ Rp${s.price_per_kg}</div>`).join('')}`;
+            document.getElementById('salesForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await addSale({ date: document.getElementById('saleDate').value, buyer_name: document.getElementById('buyerName').value, commodity: document.getElementById('saleCommodity').value, quantity: parseFloat(document.getElementById('saleQuantity').value), price_per_kg: parseFloat(document.getElementById('salePrice').value) });
+                alert("Tersimpan"); renderSales(); renderDashboard(); renderStock();
+            });
+        }
+
+        async function renderStock() {
+            const stock = await computeStock();
+            document.getElementById('stockPanel').innerHTML = `<div class="bg-white p-5 rounded shadow"><h2 class="font-bold">📦 Stok Gudang</h2><div class="grid grid-cols-2 gap-4 mt-3">${Object.entries(stock).map(([c,q]) => `<div class="bg-emerald-50 p-3 rounded text-center"><b>${c}</b><div class="text-2xl font-mono">${q.toFixed(1)} kg</div></div>`).join('')}</div></div>`;
+        }
+
+        async function renderBuyers() {
+            let buyers = await fetchBuyers();
+            document.getElementById('buyersPanel').innerHTML = `
+                <div class="bg-white p-4 rounded shadow"><div class="flex justify-between"><h2 class="font-bold">📋 Direktori Buyer</h2><button id="addBuyerBtn" class="bg-emerald-600 text-white px-3 py-1 rounded text-sm">+ Tambah</button></div>
+                <div class="mt-3 space-y-2">${buyers.map(b => `<div class="border p-2 rounded flex justify-between"><div><b>${b.buyer_name}</b><br><span class="text-xs">${b.commodity||'-'} - ${b.region||'-'}</span></div><div><button onclick="window.editBuyer('${b.id}')" class="text-blue-600 mr-2">✏️</button><button onclick="window.deleteBuyer('${b.id}')" class="text-red-600">🗑️</button></div></div>`).join('')}</div></div>`;
+            document.getElementById('addBuyerBtn')?.addEventListener('click', async () => { let name = prompt("Nama Buyer:"); if(name) await addBuyer({ buyer_name: name }); renderBuyers(); });
+            window.editBuyer = async (id) => { let newName = prompt("Nama baru:"); if(newName) await updateBuyer(id, { buyer_name: newName }); renderBuyers(); };
+            window.deleteBuyer = async (id) => { if(confirm("Hapus?")) await deleteBuyer(id); renderBuyers(); };
+        }
+
+        async function renderNationalPrices() {
+            const data = [{ name:"Copra", price:7850, trend:"▲" },{ name:"Clove", price:142500, trend:"▲" },{ name:"Nutmeg", price:98000, trend:"▼" },{ name:"Palm Oil", price:12100, trend:"▲" }];
+            document.getElementById('nationalPanel').innerHTML = `<div class="bg-white p-4 rounded shadow"><h2 class="font-bold">🏷️ Harga Nasional (Simulasi)</h2>${data.map(d => `<div class="flex justify-between border-b py-2"><span>${d.name}</span><span>Rp ${d.price.toLocaleString()}</span><span class="text-green-600">${d.trend}</span></div>`).join('')}<canvas id="natChart" class="mt-4 h-48"></canvas></div>`;
+            const ctx = document.getElementById('natChart').getContext('2d');
+            if(nationalChart) nationalChart.destroy();
+            nationalChart = new Chart(ctx, { type:'bar', data:{ labels: data.map(d=>d.name), datasets:[{ label:'Rp/kg', data: data.map(d=>d.price), backgroundColor:'#2c7a4d' }] } });
+        }
+
+        async function renderReports() {
+            const profit = await getProfit();
+            document.getElementById('reportsPanel').innerHTML = `<div class="bg-white p-4 rounded shadow"><h2 class="font-bold">📊 Analisis Profit</h2><div class="grid grid-cols-2 gap-2 my-3"><div>Total Beli: Rp ${profit.totalPurchaseValue.toLocaleString()}</div><div>Total Jual: Rp ${profit.totalSalesValue.toLocaleString()}</div><div class="col-span-2 font-bold">Profit: Rp ${profit.totalProfit.toLocaleString()}</div></div><button id="exportBtn" class="bg-emerald-700 w-full py-2 rounded text-white"><i class="fas fa-file-excel"></i> Export Excel</button><canvas id="profitChart" class="mt-4 h-48"></canvas></div>`;
+            document.getElementById('exportBtn')?.addEventListener('click', exportExcel);
+            const ctx = document.getElementById('profitChart')?.getContext('2d');
+            if(ctx) new Chart(ctx, { type:'bar', data:{ labels:['Pembelian','Penjualan','Profit'], datasets:[{ label:'Rp', data:[profit.totalPurchaseValue, profit.totalSalesValue, profit.totalProfit], backgroundColor:['#f97316','#3b82f6','#10b981'] }] } });
+        }
+
+        async function loadAllData() { await Promise.all([renderDashboard(), renderPurchases(), renderSales(), renderStock(), renderBuyers(), renderNationalPrices(), renderReports()]); }
+
+        function initTabs() {
+            const btns = document.querySelectorAll('.tab-btn');
+            const panels = { dashboard:'dashboardPanel', purchases:'purchasesPanel', sales:'salesPanel', stock:'stockPanel', buyers:'buyersPanel', national:'nationalPanel', reports:'reportsPanel' };
+            function showPanel(id) { document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); }
+            btns.forEach(btn => btn.addEventListener('click', async () => {
+                const tab = btn.dataset.tab;
+                if(panels[tab]) showPanel(panels[tab]);
+                if(tab === 'dashboard') await renderDashboard();
+                if(tab === 'purchases') await renderPurchases();
+                if(tab === 'sales') await renderSales();
+                if(tab === 'stock') await renderStock();
+                if(tab === 'buyers') await renderBuyers();
+                if(tab === 'national') await renderNationalPrices();
+                if(tab === 'reports') await renderReports();
+                btns.forEach(b => b.classList.remove('active-tab', 'bg-emerald-700', 'text-white'));
+                btn.classList.add('active-tab', 'bg-emerald-700', 'text-white');
+            }));
+            showPanel('dashboardPanel');
+            if(btns[0]) btns[0].classList.add('active-tab', 'bg-emerald-700', 'text-white');
+        }
+
+        // Event listeners
+        document.getElementById('loginBtn').onclick = async () => { try { await handleLogin(loginEmail.value, loginPassword.value); } catch(e) { authMessage.innerText = e.message; } };
+        document.getElementById('registerBtn').onclick = async () => { try { await handleRegister(regEmail.value, regPassword.value); } catch(e) { authMessage.innerText = e.message; } };
+        document.getElementById('showRegisterBtn').onclick = () => { loginPanel.classList.add('hidden'); registerPanel.classList.remove('hidden'); };
+        document.getElementById('showLoginBtn').onclick = () => { registerPanel.classList.add('hidden'); loginPanel.classList.remove('hidden'); };
+        document.getElementById('logoutBtn')?.addEventListener('click', handleLogout);
+
+        // Check session
+        (async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if(session) { currentUser = session.user; showApp(); initTabs(); } else showAuth();
+        })();
+    </script>
+</body>
+</html>
